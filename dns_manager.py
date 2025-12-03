@@ -54,6 +54,11 @@ class DNSManager(ctk.CTk):
             "Battle.net": "battle.net",
             "Ubisoft": "ubisoft.com",
             "Apex Legends": "playapex.com",
+            "ChatGPT": "chat.openai.com",
+            "Gemini (Google)": "gemini.google.com",
+            "Claude": "claude.ai",
+            "Perplexity": "perplexity.ai",
+            "YouTube": "youtube.com",
             "Cloudflare": "1.1.1.1",
             "Google DNS": "8.8.8.8"
         }
