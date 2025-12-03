@@ -1,0 +1,38 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="128" cy="128" r="120" fill="#1e3a8a" opacity="0.1"/>
+
+  <!-- Outer Ring -->
+  <circle cx="128" cy="128" r="100" stroke="#3b82f6" stroke-width="4" fill="none"/>
+
+  <!-- DNS Server Node (Center) -->
+  <circle cx="128" cy="128" r="30" fill="#3b82f6"/>
+  <circle cx="128" cy="128" r="24" fill="#1e40af"/>
+
+  <!-- Connection Lines -->
+  <line x1="128" y1="128" x2="128" y2="50" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+  <line x1="128" y1="128" x2="206" y2="128" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+  <line x1="128" y1="128" x2="128" y2="206" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+  <line x1="128" y1="128" x2="50" y2="128" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Diagonal Lines -->
+  <line x1="128" y1="128" x2="182" y2="74" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="128" y1="128" x2="182" y2="182" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="128" y1="128" x2="74" y2="182" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="128" y1="128" x2="74" y2="74" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Outer Nodes -->
+  <circle cx="128" cy="50" r="12" fill="#3b82f6"/>
+  <circle cx="206" cy="128" r="12" fill="#3b82f6"/>
+  <circle cx="128" cy="206" r="12" fill="#3b82f6"/>
+  <circle cx="50" cy="128" r="12" fill="#3b82f6"/>
+
+  <!-- Diagonal Nodes -->
+  <circle cx="182" cy="74" r="10" fill="#60a5fa"/>
+  <circle cx="182" cy="182" r="10" fill="#60a5fa"/>
+  <circle cx="74" cy="182" r="10" fill="#60a5fa"/>
+  <circle cx="74" cy="74" r="10" fill="#60a5fa"/>
+
+  <!-- DNS Text -->
+  <text x="128" y="138" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">DNS</text>
+</svg>

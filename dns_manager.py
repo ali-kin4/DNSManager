@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, Menu
 import subprocess
 import json
 import os
@@ -9,6 +9,11 @@ import threading
 from typing import Dict, List, Optional
 import ctypes
 import sys
+import webbrowser
+from PIL import Image, ImageDraw
+import darkdetect
+from version import __version__, APP_NAME, APP_URL
+from updater import UpdateManager, UpdateChecker
 
 class DNSManager(ctk.CTk):
     def __init__(self):
@@ -16,6 +21,9 @@ class DNSManager(ctk.CTk):
 
         # Configure window
         self.title("DNS Manager Pro")
+
+        # Set icon
+        self.set_app_icon()
 
         # Center window on screen
         window_width = 1100
@@ -28,8 +36,9 @@ class DNSManager(ctk.CTk):
 
         self.resizable(True, True)
 
-        # Set theme
-        ctk.set_appearance_mode("dark")
+        # Set theme to system default
+        self.current_theme_mode = "system"  # "light", "dark", or "system"
+        self.apply_system_theme()
         ctk.set_default_color_theme("blue")
 
         # Data
@@ -38,6 +47,16 @@ class DNSManager(ctk.CTk):
         self.current_adapter = None
         self.adapters = []
         self.admin_warning_shown = False
+        self.benchmark_running = False
+
+        # Performance optimizations
+        self._dns_cache = {}
+        self._cache_time = {}
+        self._cache_duration = 5  # seconds
+
+        # Update manager
+        self.update_manager = UpdateManager()
+        self.pending_update = None
 
         # Gaming servers for ping tests
         self.gaming_servers = {
@@ -82,11 +101,17 @@ class DNSManager(ctk.CTk):
         # Get network adapters
         self.refresh_adapters()
 
+        # Create menu bar
+        self.create_menu_bar()
+
         # Create UI
         self.create_widgets()
 
         # Check admin rights
         self.check_admin()
+
+        # Check for updates on startup (in background)
+        self.check_for_updates_background()
 
     def check_admin(self):
         """Check if running with admin privileges"""
@@ -97,6 +122,460 @@ class DNSManager(ctk.CTk):
                 self.show_warning("⚠️ Administrator rights required!\n\nPlease run this application as Administrator to change DNS settings.")
         except:
             pass
+
+    def set_app_icon(self):
+        """Set application icon"""
+        try:
+            # Try to load SVG logo and convert to icon
+            if os.path.exists("logo.svg"):
+                # For now, we'll create a simple icon programmatically
+                icon_size = 64
+                image = Image.new('RGB', (icon_size, icon_size), color='#1e3a8a')
+                draw = ImageDraw.Draw(image)
+
+                # Draw a simple DNS icon
+                draw.ellipse([8, 8, 56, 56], fill='#3b82f6', outline='#60a5fa', width=3)
+                draw.ellipse([24, 24, 40, 40], fill='#1e40af')
+
+                # Save as ICO
+                icon_path = "logo.ico"
+                image.save(icon_path, format='ICO')
+                self.iconbitmap(icon_path)
+        except Exception as e:
+            print(f"Could not set icon: {e}")
+
+    def apply_system_theme(self):
+        """Apply system theme or user selected theme"""
+        if self.current_theme_mode == "system":
+            try:
+                system_theme = darkdetect.theme()
+                if system_theme:
+                    ctk.set_appearance_mode(system_theme.lower())
+                else:
+                    ctk.set_appearance_mode("dark")
+            except:
+                ctk.set_appearance_mode("dark")
+        else:
+            ctk.set_appearance_mode(self.current_theme_mode)
+
+    def create_menu_bar(self):
+        """Create menu bar"""
+        menubar = Menu(self, bg='#2b2b2b', fg='white', activebackground='#3b3b3b',
+                      activeforeground='white', bd=0)
+
+        # File Menu
+        file_menu = Menu(menubar, tearoff=0, bg='#2b2b2b', fg='white',
+                        activebackground='#3b3b3b', activeforeground='white')
+        file_menu.add_command(label="Import Configs", command=self.import_configs)
+        file_menu.add_command(label="Export Configs", command=self.export_configs)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        # Tools Menu
+        tools_menu = Menu(menubar, tearoff=0, bg='#2b2b2b', fg='white',
+                         activebackground='#3b3b3b', activeforeground='white')
+        tools_menu.add_command(label="Flush DNS Cache", command=self.flush_dns_cache)
+        tools_menu.add_command(label="Network Diagnostics", command=self.show_network_diagnostics)
+        tools_menu.add_command(label="Benchmark All DNS", command=self.show_benchmark_dialog)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+
+        # View Menu
+        view_menu = Menu(menubar, tearoff=0, bg='#2b2b2b', fg='white',
+                        activebackground='#3b3b3b', activeforeground='white')
+        view_menu.add_command(label="System Theme", command=lambda: self.change_theme("system"))
+        view_menu.add_command(label="Dark Theme", command=lambda: self.change_theme("dark"))
+        view_menu.add_command(label="Light Theme", command=lambda: self.change_theme("light"))
+        menubar.add_cascade(label="View", menu=view_menu)
+
+        # Help Menu
+        help_menu = Menu(menubar, tearoff=0, bg='#2b2b2b', fg='white',
+                        activebackground='#3b3b3b', activeforeground='white')
+        help_menu.add_command(label="Check for Updates", command=self.check_for_updates_manual)
+        help_menu.add_separator()
+        help_menu.add_command(label="About", command=self.show_about)
+        help_menu.add_command(label="Documentation", command=self.open_docs)
+        help_menu.add_command(label="GitHub Repository", command=self.open_github)
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.config(menu=menubar)
+
+    def change_theme(self, mode: str):
+        """Change application theme"""
+        self.current_theme_mode = mode
+        self.apply_system_theme()
+
+        # Update theme switch if it exists
+        if hasattr(self, 'theme_switch'):
+            if mode == "dark":
+                self.theme_switch.select()
+            elif mode == "light":
+                self.theme_switch.deselect()
+
+    def import_configs(self):
+        """Import configurations from file"""
+        from tkinter import filedialog
+        filename = filedialog.askopenfilename(
+            title="Import DNS Configurations",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if filename:
+            try:
+                with open(filename, 'r') as f:
+                    imported = json.load(f)
+                self.saved_configs.update(imported)
+                self.save_configs_to_file()
+                self.refresh_saved_configs_ui()
+                self.show_success(f"Imported {len(imported)} configurations!")
+            except Exception as e:
+                self.show_error(f"Failed to import: {str(e)}")
+
+    def export_configs(self):
+        """Export configurations to file"""
+        from tkinter import filedialog
+        filename = filedialog.asksaveasfilename(
+            title="Export DNS Configurations",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if filename:
+            try:
+                with open(filename, 'w') as f:
+                    json.dump(self.saved_configs, f, indent=2)
+                self.show_success("Configurations exported successfully!")
+            except Exception as e:
+                self.show_error(f"Failed to export: {str(e)}")
+
+    def flush_dns_cache(self):
+        """Flush DNS cache"""
+        try:
+            subprocess.run(['ipconfig', '/flushdns'],
+                         creationflags=subprocess.CREATE_NO_WINDOW,
+                         check=True)
+            self.show_success("DNS cache flushed successfully!")
+        except Exception as e:
+            self.show_error(f"Failed to flush DNS cache: {str(e)}")
+
+    def show_network_diagnostics(self):
+        """Show network diagnostics window"""
+        diag_window = ctk.CTkToplevel(self)
+        diag_window.title("Network Diagnostics")
+        diag_window.geometry("600x400")
+
+        text_box = ctk.CTkTextbox(diag_window, font=ctk.CTkFont(family="Consolas", size=11))
+        text_box.pack(fill="both", expand=True, padx=20, pady=20)
+
+        def run_diagnostics():
+            try:
+                result = subprocess.run(['ipconfig', '/all'],
+                                      capture_output=True,
+                                      text=True,
+                                      creationflags=subprocess.CREATE_NO_WINDOW)
+                text_box.insert("1.0", result.stdout)
+            except Exception as e:
+                text_box.insert("1.0", f"Error: {str(e)}")
+
+        threading.Thread(target=run_diagnostics, daemon=True).start()
+
+    def show_about(self):
+        """Show about dialog"""
+        about_window = ctk.CTkToplevel(self)
+        about_window.title("About DNS Manager Pro")
+        about_window.geometry("400x300")
+        about_window.resizable(False, False)
+
+        # Center the window
+        about_window.update_idletasks()
+        x = (about_window.winfo_screenwidth() // 2) - (400 // 2)
+        y = (about_window.winfo_screenheight() // 2) - (300 // 2)
+        about_window.geometry(f"+{x}+{y}")
+
+        frame = ctk.CTkFrame(about_window, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=30, pady=30)
+
+        ctk.CTkLabel(frame, text=f"🌐 {APP_NAME}",
+                    font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0, 10))
+
+        ctk.CTkLabel(frame, text=f"Version {__version__}",
+                    font=ctk.CTkFont(size=14)).pack(pady=5)
+
+        ctk.CTkLabel(frame, text="Advanced DNS Configuration Tool",
+                    font=ctk.CTkFont(size=12),
+                    text_color="gray").pack(pady=5)
+
+        # Creator info
+        creator_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        creator_frame.pack(pady=10)
+
+        ctk.CTkLabel(creator_frame, text="Created by Ali Jabbary",
+                    font=ctk.CTkFont(size=11, weight="bold")).pack()
+
+        website_btn = ctk.CTkButton(creator_frame, text="🌐 alijabbary.com",
+                                   command=lambda: webbrowser.open("https://alijabbary.com"),
+                                   font=ctk.CTkFont(size=10),
+                                   width=120, height=25,
+                                   fg_color="transparent",
+                                   hover_color="#3b3b3b")
+        website_btn.pack(pady=2)
+
+        ctk.CTkLabel(frame, text="\nFeatures:",
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(5, 5))
+
+        features_text = """• Quick DNS switching
+• Multiple DNS presets
+• Configuration management
+• Gaming server ping tests
+• DNS benchmarking
+• System theme support"""
+
+        ctk.CTkLabel(frame, text=features_text,
+                    font=ctk.CTkFont(size=11),
+                    justify="left").pack(pady=5)
+
+        ctk.CTkButton(frame, text="Close", command=about_window.destroy,
+                     width=100).pack(pady=(20, 0))
+
+    def open_docs(self):
+        """Open documentation"""
+        webbrowser.open("https://github.com/ali-kin4/DNSManager#readme")
+
+    def open_github(self):
+        """Open GitHub repository"""
+        webbrowser.open(APP_URL)
+
+    def check_for_updates_background(self):
+        """Check for updates in background on startup"""
+        def callback(update_info):
+            if update_info:
+                self.pending_update = update_info
+                self.after(100, lambda: self.show_update_notification(update_info))
+
+        checker = UpdateChecker(callback)
+        checker.start()
+
+    def check_for_updates_manual(self):
+        """Manual update check from menu"""
+        # Show checking dialog
+        check_window = ctk.CTkToplevel(self)
+        check_window.title("Checking for Updates")
+        check_window.geometry("400x150")
+        check_window.resizable(False, False)
+
+        # Center window
+        check_window.update_idletasks()
+        x = (check_window.winfo_screenwidth() // 2) - 200
+        y = (check_window.winfo_screenheight() // 2) - 75
+        check_window.geometry(f"+{x}+{y}")
+
+        frame = ctk.CTkFrame(check_window, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=30, pady=30)
+
+        status_label = ctk.CTkLabel(frame, text="Checking for updates...",
+                                    font=ctk.CTkFont(size=14))
+        status_label.pack(pady=20)
+
+        progress = ctk.CTkProgressBar(frame, mode="indeterminate")
+        progress.pack(pady=10, fill="x")
+        progress.start()
+
+        def check_updates():
+            update_info = self.update_manager.check_for_updates()
+
+            def show_result():
+                check_window.destroy()
+                if update_info:
+                    self.show_update_dialog(update_info)
+                else:
+                    self.show_success(f"You're up to date!\n\nCurrent version: {__version__}")
+
+            self.after(100, show_result)
+
+        threading.Thread(target=check_updates, daemon=True).start()
+
+    def show_update_notification(self, update_info):
+        """Show update notification banner"""
+        result = messagebox.askyesno(
+            "Update Available",
+            f"A new version of {APP_NAME} is available!\n\n"
+            f"Current version: {update_info['current_version']}\n"
+            f"Latest version: {update_info['version']}\n\n"
+            "Would you like to update now?",
+            icon='info'
+        )
+
+        if result:
+            self.show_update_dialog(update_info)
+
+    def show_update_dialog(self, update_info):
+        """Show detailed update dialog"""
+        update_window = ctk.CTkToplevel(self)
+        update_window.title("Update Available")
+        update_window.geometry("600x500")
+        update_window.resizable(False, False)
+
+        # Center window
+        update_window.update_idletasks()
+        x = (update_window.winfo_screenwidth() // 2) - 300
+        y = (update_window.winfo_screenheight() // 2) - 250
+        update_window.geometry(f"+{x}+{y}")
+
+        main_frame = ctk.CTkFrame(update_window, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=30, pady=30)
+
+        # Header
+        ctk.CTkLabel(main_frame, text="🎉 Update Available!",
+                    font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0, 10))
+
+        # Version info
+        version_frame = ctk.CTkFrame(main_frame)
+        version_frame.pack(fill="x", pady=10)
+
+        ctk.CTkLabel(version_frame, text=f"Current: v{update_info['current_version']}",
+                    font=ctk.CTkFont(size=12)).pack(pady=5)
+        ctk.CTkLabel(version_frame, text="→",
+                    font=ctk.CTkFont(size=16)).pack(pady=2)
+        ctk.CTkLabel(version_frame, text=f"Latest: v{update_info['version']}",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="#2ecc71").pack(pady=5)
+
+        # Release notes
+        notes_frame = ctk.CTkFrame(main_frame)
+        notes_frame.pack(fill="both", expand=True, pady=10)
+
+        ctk.CTkLabel(notes_frame, text="What's New:",
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+
+        notes_text = ctk.CTkTextbox(notes_frame, height=200, font=ctk.CTkFont(size=11))
+        notes_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        notes_text.insert("1.0", update_info['release_notes'])
+        notes_text.configure(state="disabled")
+
+        # Progress bar (hidden initially)
+        progress_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        progress_label = ctk.CTkLabel(progress_frame, text="",
+                                     font=ctk.CTkFont(size=11))
+        progress_bar = ctk.CTkProgressBar(progress_frame)
+
+        # Buttons
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.pack(fill="x", pady=(10, 0))
+
+        def start_update():
+            # Disable buttons
+            for widget in button_frame.winfo_children():
+                widget.configure(state="disabled")
+
+            # Show progress
+            progress_frame.pack(fill="x", pady=10)
+            progress_label.pack(pady=(0, 5))
+            progress_bar.pack(fill="x")
+            progress_bar.set(0)
+
+            def download_and_install():
+                # Update progress
+                def update_progress(percent, downloaded, total):
+                    progress = percent / 100
+                    progress_bar.set(progress)
+                    mb_downloaded = downloaded / (1024 * 1024)
+                    mb_total = total / (1024 * 1024)
+                    progress_label.configure(text=f"Downloading: {mb_downloaded:.1f} MB / {mb_total:.1f} MB ({percent:.0f}%)")
+
+                progress_label.configure(text="Downloading update...")
+
+                # Download
+                update_file = self.update_manager.download_update(
+                    update_info['download_url'],
+                    progress_callback=update_progress
+                )
+
+                if update_file:
+                    def finish_install():
+                        progress_label.configure(text="Installing update...")
+                        progress_bar.set(1.0)
+
+                        # Install
+                        success = self.update_manager.install_update(update_file)
+
+                        if success:
+                            result = messagebox.askyesno(
+                                "Update Installed",
+                                "Update installed successfully!\n\nRestart now to apply the update?",
+                                icon='info'
+                            )
+
+                            if result:
+                                self.update_manager.restart_app()
+                            else:
+                                update_window.destroy()
+                        else:
+                            progress_label.configure(text="Installation failed!")
+                            messagebox.showerror("Update Failed", "Failed to install update. Please try again.")
+                            update_window.destroy()
+
+                    self.after(100, finish_install)
+                else:
+                    def show_error():
+                        progress_label.configure(text="Download failed!")
+                        messagebox.showerror("Download Failed", "Failed to download update. Please check your internet connection.")
+                        update_window.destroy()
+
+                    self.after(100, show_error)
+
+            threading.Thread(target=download_and_install, daemon=True).start()
+
+        def open_release_page():
+            webbrowser.open(update_info['html_url'])
+            update_window.destroy()
+
+        # Check if this is a git repo
+        if self.update_manager.check_git_repo():
+            def update_via_git():
+                progress_frame.pack(fill="x", pady=10)
+                progress_label.pack(pady=(0, 5))
+                progress_label.configure(text="Updating via git...")
+                progress_bar.pack(fill="x")
+                progress_bar.set(0.5)
+
+                def do_git_update():
+                    success, message = self.update_manager.update_via_git()
+
+                    def finish():
+                        if success:
+                            result = messagebox.askyesno(
+                                "Update Complete",
+                                f"{message}\n\nRestart now to apply the update?",
+                                icon='info'
+                            )
+                            if result:
+                                self.update_manager.restart_app()
+                            else:
+                                update_window.destroy()
+                        else:
+                            messagebox.showerror("Update Failed", f"Git update failed: {message}")
+                            update_window.destroy()
+
+                    self.after(100, finish)
+
+                threading.Thread(target=do_git_update, daemon=True).start()
+
+            ctk.CTkButton(button_frame, text="Update via Git",
+                         command=update_via_git,
+                         font=ctk.CTkFont(size=13),
+                         fg_color="#8e44ad", hover_color="#732d91").pack(side="left", padx=5, fill="x", expand=True)
+
+        ctk.CTkButton(button_frame, text="Download & Install",
+                     command=start_update,
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     fg_color="#2ecc71", hover_color="#27ae60").pack(side="left", padx=5, fill="x", expand=True)
+
+        ctk.CTkButton(button_frame, text="View Release",
+                     command=open_release_page,
+                     font=ctk.CTkFont(size=13)).pack(side="left", padx=5, fill="x", expand=True)
+
+        ctk.CTkButton(button_frame, text="Later",
+                     command=update_window.destroy,
+                     font=ctk.CTkFont(size=13),
+                     fg_color="gray").pack(side="left", padx=5, fill="x", expand=True)
 
     def create_widgets(self):
         """Create all UI elements"""
@@ -115,15 +594,22 @@ class DNSManager(ctk.CTk):
         )
         title_label.pack(side="left")
 
-        # Theme toggle
-        self.theme_switch = ctk.CTkSwitch(
-            header_frame,
-            text="Dark Mode",
-            command=self.toggle_theme,
-            font=ctk.CTkFont(size=12)
+        # Theme selector
+        theme_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        theme_frame.pack(side="right", padx=10)
+
+        ctk.CTkLabel(theme_frame, text="Theme:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 5))
+
+        self.theme_selector = ctk.CTkSegmentedButton(
+            theme_frame,
+            values=["Light", "Dark", "System"],
+            command=self.on_theme_change,
+            font=ctk.CTkFont(size=11),
+            width=200
         )
-        self.theme_switch.pack(side="right", padx=10)
-        self.theme_switch.select()
+        self.theme_selector.pack(side="left")
+        self.theme_selector.set("System" if self.current_theme_mode == "system" else
+                               self.current_theme_mode.capitalize())
 
         # Content area with 2 columns
         content_frame = ctk.CTkFrame(main_container, fg_color="transparent")
@@ -392,12 +878,10 @@ class DNSManager(ctk.CTk):
             label.pack(side="right")
             self.ping_labels[name] = label
 
-    def toggle_theme(self):
-        """Toggle between dark and light mode"""
-        if self.theme_switch.get():
-            ctk.set_appearance_mode("dark")
-        else:
-            ctk.set_appearance_mode("light")
+    def on_theme_change(self, value):
+        """Handle theme change from segmented button"""
+        theme_map = {"Light": "light", "Dark": "dark", "System": "system"}
+        self.change_theme(theme_map[value])
 
     def refresh_adapters(self):
         """Get list of network adapters"""
@@ -441,17 +925,24 @@ class DNSManager(ctk.CTk):
         self.current_adapter = choice
         self.show_current_dns()
 
-    def get_current_dns_servers(self):
-        """Get current DNS servers as a dictionary"""
+    def get_current_dns_servers(self, use_cache=True):
+        """Get current DNS servers as a dictionary with caching"""
         if not self.current_adapter:
             return None
+
+        # Check cache
+        if use_cache and self.current_adapter in self._dns_cache:
+            cache_age = time.time() - self._cache_time.get(self.current_adapter, 0)
+            if cache_age < self._cache_duration:
+                return self._dns_cache[self.current_adapter]
 
         try:
             result = subprocess.run(
                 ['netsh', 'interface', 'ip', 'show', 'dns', self.current_adapter],
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                timeout=3  # Add timeout for faster failure
             )
 
             dns_servers = []
@@ -464,12 +955,18 @@ class DNSManager(ctk.CTk):
                     if self.is_valid_ip(ip):
                         dns_servers.append(ip)
 
+            dns_info = None
             if dns_servers:
-                return {
+                dns_info = {
                     'primary': dns_servers[0],
                     'secondary': dns_servers[1] if len(dns_servers) > 1 else ''
                 }
-            return None
+
+            # Update cache
+            self._dns_cache[self.current_adapter] = dns_info
+            self._cache_time[self.current_adapter] = time.time()
+
+            return dns_info
         except:
             return None
 
@@ -534,6 +1031,10 @@ class DNSManager(ctk.CTk):
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
 
+            # Invalidate DNS cache
+            if self.current_adapter in self._dns_cache:
+                del self._dns_cache[self.current_adapter]
+
             self.show_success(f"DNS applied successfully!\n\nPrimary: {primary}" + (f"\nSecondary: {secondary}" if secondary else ""))
             self.show_current_dns()
 
@@ -556,6 +1057,10 @@ class DNSManager(ctk.CTk):
                 check=True,
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
+
+            # Invalidate DNS cache
+            if self.current_adapter in self._dns_cache:
+                del self._dns_cache[self.current_adapter]
 
             self.show_success("DNS reset to DHCP (automatic) successfully!")
             self.show_current_dns()
@@ -638,12 +1143,23 @@ class DNSManager(ctk.CTk):
         # Get current DNS to check which config is active
         current_dns = self.get_current_dns_servers()
 
-        for name, dns in self.saved_configs.items():
+        # Sort configs: active ones first, then alphabetically
+        def sort_key(item):
+            name, dns = item
+            is_active = False
+            if current_dns:
+                is_active = (current_dns['primary'] == dns['primary'] and
+                           current_dns.get('secondary', '') == dns.get('secondary', ''))
+            return (not is_active, name.lower())  # False (active) comes before True (inactive)
+
+        sorted_configs = sorted(self.saved_configs.items(), key=sort_key)
+
+        for name, dns in sorted_configs:
             # Check if this config is currently active
             is_active = False
             if current_dns:
                 is_active = (current_dns['primary'] == dns['primary'] and
-                           current_dns['secondary'] == dns['secondary'])
+                           current_dns.get('secondary', '') == dns.get('secondary', ''))
 
             # Use different styling for active config
             if is_active:
@@ -776,6 +1292,179 @@ class DNSManager(ctk.CTk):
                 label.configure(text="Error", text_color="#e74c3c")
 
         threading.Thread(target=do_ping, daemon=True).start()
+
+    def show_benchmark_dialog(self):
+        """Show DNS benchmark dialog"""
+        if self.benchmark_running:
+            self.show_warning("A benchmark is already running!")
+            return
+
+        benchmark_window = ctk.CTkToplevel(self)
+        benchmark_window.title("DNS Benchmark")
+        benchmark_window.geometry("800x600")
+
+        # Center the window
+        benchmark_window.update_idletasks()
+        x = (benchmark_window.winfo_screenwidth() // 2) - (400)
+        y = (benchmark_window.winfo_screenheight() // 2) - (300)
+        benchmark_window.geometry(f"+{x}+{y}")
+
+        main_frame = ctk.CTkFrame(benchmark_window, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Title
+        ctk.CTkLabel(main_frame, text="DNS Configuration Benchmark",
+                    font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(0, 10))
+
+        ctk.CTkLabel(main_frame, text="Test all your saved DNS configs against selected services",
+                    font=ctk.CTkFont(size=12), text_color="gray").pack(pady=(0, 20))
+
+        # Service selection
+        service_frame = ctk.CTkFrame(main_frame)
+        service_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        ctk.CTkLabel(service_frame, text="Select Services to Test:",
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+
+        # Scrollable frame for service checkboxes
+        service_scroll = ctk.CTkScrollableFrame(service_frame, height=200)
+        service_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        selected_services = {}
+        for name in self.gaming_servers.keys():
+            var = ctk.BooleanVar(value=False)
+            checkbox = ctk.CTkCheckBox(service_scroll, text=name, variable=var,
+                                      font=ctk.CTkFont(size=12))
+            checkbox.pack(anchor="w", pady=3, padx=5)
+            selected_services[name] = var
+
+        # Quick select buttons
+        quick_btn_frame = ctk.CTkFrame(service_frame, fg_color="transparent")
+        quick_btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        def select_all():
+            for var in selected_services.values():
+                var.set(True)
+
+        def select_none():
+            for var in selected_services.values():
+                var.set(False)
+
+        def select_gaming():
+            gaming_keywords = ['Fortnite', 'Call of Duty', 'EA', 'Battlefield', 'Steam',
+                             'Riot', 'Valorant', 'League', 'Battle.net', 'Ubisoft', 'Apex']
+            for name, var in selected_services.items():
+                var.set(any(keyword in name for keyword in gaming_keywords))
+
+        def select_ai():
+            ai_keywords = ['ChatGPT', 'Gemini', 'Claude', 'Perplexity']
+            for name, var in selected_services.items():
+                var.set(any(keyword in name for keyword in ai_keywords))
+
+        ctk.CTkButton(quick_btn_frame, text="Select All", command=select_all,
+                     width=100, height=30).pack(side="left", padx=3)
+        ctk.CTkButton(quick_btn_frame, text="Clear All", command=select_none,
+                     width=100, height=30).pack(side="left", padx=3)
+        ctk.CTkButton(quick_btn_frame, text="Gaming", command=select_gaming,
+                     width=100, height=30).pack(side="left", padx=3)
+        ctk.CTkButton(quick_btn_frame, text="AI Platforms", command=select_ai,
+                     width=100, height=30).pack(side="left", padx=3)
+
+        # Results area
+        results_frame = ctk.CTkFrame(main_frame)
+        results_frame.pack(fill="both", expand=True, pady=(10, 0))
+
+        ctk.CTkLabel(results_frame, text="Benchmark Results:",
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+
+        results_scroll = ctk.CTkScrollableFrame(results_frame, height=150)
+        results_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        status_label = ctk.CTkLabel(results_frame, text="Ready to start benchmark",
+                                   font=ctk.CTkFont(size=11), text_color="gray")
+        status_label.pack(pady=(0, 10))
+
+        # Start benchmark button
+        def start_benchmark():
+            selected = [name for name, var in selected_services.items() if var.get()]
+            if not selected:
+                self.show_error("Please select at least one service to test!")
+                return
+
+            if not self.saved_configs:
+                self.show_error("No saved DNS configurations to test!")
+                return
+
+            self.benchmark_running = True
+            status_label.configure(text="Benchmark running...", text_color="#f39c12")
+
+            def run_benchmark():
+                results = {}
+
+                # Clear results area
+                for widget in results_scroll.winfo_children():
+                    widget.destroy()
+
+                # Test each DNS config
+                for config_name, dns_config in self.saved_configs.items():
+                    results[config_name] = {}
+
+                    # Apply this DNS temporarily (or test without applying)
+                    # For now, we'll just measure DNS resolution time
+                    for service_name in selected:
+                        server = self.gaming_servers[service_name]
+                        try:
+                            start = time.time()
+                            socket.gethostbyname(server)
+                            latency = (time.time() - start) * 1000  # Convert to ms
+                            results[config_name][service_name] = latency
+                        except:
+                            results[config_name][service_name] = None
+
+                # Calculate averages and display results
+                config_averages = []
+                for config_name, service_results in results.items():
+                    valid_results = [v for v in service_results.values() if v is not None]
+                    if valid_results:
+                        avg = sum(valid_results) / len(valid_results)
+                        config_averages.append((config_name, avg, service_results))
+
+                # Sort by average (best first)
+                config_averages.sort(key=lambda x: x[1])
+
+                # Display results
+                for rank, (config_name, avg, service_results) in enumerate(config_averages, 1):
+                    result_frame = ctk.CTkFrame(results_scroll)
+                    result_frame.pack(fill="x", pady=3)
+
+                    # Rank badge
+                    rank_color = "#2ecc71" if rank == 1 else "#f39c12" if rank == 2 else "#e74c3c" if rank == 3 else "gray"
+                    rank_text = f"#{rank}"
+
+                    ctk.CTkLabel(result_frame, text=rank_text, font=ctk.CTkFont(size=14, weight="bold"),
+                               text_color=rank_color, width=40).pack(side="left", padx=5)
+
+                    info_frame = ctk.CTkFrame(result_frame, fg_color="transparent")
+                    info_frame.pack(side="left", fill="x", expand=True, padx=5)
+
+                    ctk.CTkLabel(info_frame, text=config_name, font=ctk.CTkFont(size=13, weight="bold"),
+                               anchor="w").pack(anchor="w")
+
+                    success_count = len([v for v in service_results.values() if v is not None])
+                    detail_text = f"Avg: {avg:.1f}ms | {success_count}/{len(service_results)} services"
+                    ctk.CTkLabel(info_frame, text=detail_text, font=ctk.CTkFont(size=10),
+                               text_color="gray", anchor="w").pack(anchor="w")
+
+                self.benchmark_running = False
+                status_label.configure(text=f"Benchmark complete! Tested {len(config_averages)} configs against {len(selected)} services",
+                                     text_color="#2ecc71")
+
+            threading.Thread(target=run_benchmark, daemon=True).start()
+
+        start_btn = ctk.CTkButton(main_frame, text="Start Benchmark", command=start_benchmark,
+                                 font=ctk.CTkFont(size=14, weight="bold"), height=40,
+                                 fg_color="#2ecc71", hover_color="#27ae60")
+        start_btn.pack(pady=(10, 0))
 
     def test_all_servers(self):
         """Test all gaming servers"""
