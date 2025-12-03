@@ -16,7 +16,16 @@ class DNSManager(ctk.CTk):
 
         # Configure window
         self.title("DNS Manager Pro")
-        self.geometry("1100x750")
+
+        # Center window on screen
+        window_width = 1100
+        window_height = 750
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
         self.resizable(True, True)
 
         # Set theme
@@ -28,6 +37,7 @@ class DNSManager(ctk.CTk):
         self.saved_configs: Dict = {}
         self.current_adapter = None
         self.adapters = []
+        self.admin_warning_shown = False
 
         # Gaming servers for ping tests
         self.gaming_servers = {
@@ -77,7 +87,8 @@ class DNSManager(ctk.CTk):
         """Check if running with admin privileges"""
         try:
             is_admin = ctypes.windll.shell32.IsUserAnAdmin()
-            if not is_admin:
+            if not is_admin and not self.admin_warning_shown:
+                self.admin_warning_shown = True
                 self.show_warning("⚠️ Administrator rights required!\n\nPlease run this application as Administrator to change DNS settings.")
         except:
             pass
@@ -404,8 +415,15 @@ class DNSManager(ctk.CTk):
             if hasattr(self, 'adapter_combo') and self.adapters:
                 self.adapter_combo.configure(values=self.adapters)
                 if self.adapters:
-                    self.adapter_combo.set(self.adapters[0])
-                    self.current_adapter = self.adapters[0]
+                    # Try to find WiFi adapter as default
+                    default_adapter = self.adapters[0]
+                    for adapter in self.adapters:
+                        if 'wi-fi' in adapter.lower() or 'wifi' in adapter.lower() or 'wireless' in adapter.lower():
+                            default_adapter = adapter
+                            break
+
+                    self.adapter_combo.set(default_adapter)
+                    self.current_adapter = default_adapter
                     self.show_current_dns()
         except Exception as e:
             self.show_error(f"Failed to get network adapters: {str(e)}")

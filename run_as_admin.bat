@@ -19,13 +19,6 @@ if '%errorlevel%' NEQ '0' (
     pushd "%CD%"
     CD /D "%~dp0"
 
-:: Run the Python application
-echo Starting DNS Manager Pro...
-python dns_manager.py
-
-:: Keep window open if there's an error
-if %errorlevel% NEQ 0 (
-    echo.
-    echo An error occurred. Press any key to exit...
-    pause >nul
-)
+:: Run the Python application without console window
+start "" pythonw.exe dns_manager.py
+exit
