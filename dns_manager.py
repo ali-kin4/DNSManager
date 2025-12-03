@@ -55,7 +55,7 @@ class DNSManager(ctk.CTk):
             "Ubisoft": "ubisoft.com",
             "Apex Legends": "playapex.com",
             "ChatGPT": "chat.openai.com",
-            "Gemini (Google)": "gemini.google.com",
+            "Gemini": "gemini.google.com",
             "Claude": "claude.ai",
             "Perplexity": "perplexity.ai",
             "YouTube": "youtube.com",
@@ -157,7 +157,8 @@ class DNSManager(ctk.CTk):
             values=self.adapters,
             width=350,
             command=self.on_adapter_change,
-            font=ctk.CTkFont(size=13)
+            font=ctk.CTkFont(size=13),
+            state="readonly"
         )
         self.adapter_combo.pack(side="left", fill="x", expand=True)
 
@@ -422,8 +423,10 @@ class DNSManager(ctk.CTk):
                 if self.adapters:
                     # Try to find WiFi adapter as default
                     default_adapter = self.adapters[0]
+                    wifi_keywords = ['wi-fi', 'wifi', 'wireless', 'wlan', '802.11']
                     for adapter in self.adapters:
-                        if 'wi-fi' in adapter.lower() or 'wifi' in adapter.lower() or 'wireless' in adapter.lower():
+                        adapter_lower = adapter.lower()
+                        if any(keyword in adapter_lower for keyword in wifi_keywords):
                             default_adapter = adapter
                             break
 
@@ -438,10 +441,10 @@ class DNSManager(ctk.CTk):
         self.current_adapter = choice
         self.show_current_dns()
 
-    def show_current_dns(self):
-        """Display current DNS settings for selected adapter"""
+    def get_current_dns_servers(self):
+        """Get current DNS servers as a dictionary"""
         if not self.current_adapter:
-            return
+            return None
 
         try:
             result = subprocess.run(
@@ -462,14 +465,29 @@ class DNSManager(ctk.CTk):
                         dns_servers.append(ip)
 
             if dns_servers:
-                dns_text = f"Primary: {dns_servers[0]}"
-                if len(dns_servers) > 1:
-                    dns_text += f"\nSecondary: {dns_servers[1]}"
-                self.current_dns_label.configure(text=dns_text)
-            else:
-                self.current_dns_label.configure(text="DNS: DHCP (Automatic)")
-        except Exception as e:
-            self.current_dns_label.configure(text=f"Error: {str(e)}")
+                return {
+                    'primary': dns_servers[0],
+                    'secondary': dns_servers[1] if len(dns_servers) > 1 else ''
+                }
+            return None
+        except:
+            return None
+
+    def show_current_dns(self):
+        """Display current DNS settings for selected adapter"""
+        current_dns = self.get_current_dns_servers()
+
+        if current_dns:
+            dns_text = f"Primary: {current_dns['primary']}"
+            if current_dns['secondary']:
+                dns_text += f"\nSecondary: {current_dns['secondary']}"
+            self.current_dns_label.configure(text=dns_text)
+        else:
+            self.current_dns_label.configure(text="DNS: DHCP (Automatic)")
+
+        # Refresh saved configs UI to update highlighting
+        if hasattr(self, 'saved_scroll'):
+            self.refresh_saved_configs_ui()
 
     def is_valid_ip(self, ip: str) -> bool:
         """Validate IP address format"""
@@ -617,18 +635,36 @@ class DNSManager(ctk.CTk):
             ).pack(pady=20)
             return
 
+        # Get current DNS to check which config is active
+        current_dns = self.get_current_dns_servers()
+
         for name, dns in self.saved_configs.items():
-            config_frame = ctk.CTkFrame(self.saved_scroll)
+            # Check if this config is currently active
+            is_active = False
+            if current_dns:
+                is_active = (current_dns['primary'] == dns['primary'] and
+                           current_dns['secondary'] == dns['secondary'])
+
+            # Use different styling for active config
+            if is_active:
+                config_frame = ctk.CTkFrame(self.saved_scroll, border_width=3, border_color="#2ecc71")
+            else:
+                config_frame = ctk.CTkFrame(self.saved_scroll)
             config_frame.pack(fill="x", pady=3)
 
             info_frame = ctk.CTkFrame(config_frame, fg_color="transparent")
             info_frame.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
+            # Name label with active indicator
+            name_text = f"{name}  ✓ ACTIVE" if is_active else name
+            name_color = "#2ecc71" if is_active else None
+
             ctk.CTkLabel(
                 info_frame,
-                text=name,
+                text=name_text,
                 font=ctk.CTkFont(size=13, weight="bold"),
-                anchor="w"
+                anchor="w",
+                text_color=name_color
             ).pack(anchor="w")
 
             ctk.CTkLabel(
