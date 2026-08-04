@@ -668,13 +668,45 @@ class DNSManager(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(anchor="w", padx=10, pady=(10, 5))
 
-        self.current_dns_label = ctk.CTkLabel(
-            current_frame,
+        # Two-column display: IPv4 left, IPv6 right
+        dns_status_cols = ctk.CTkFrame(current_frame, fg_color="transparent")
+        dns_status_cols.pack(fill="x", padx=10, pady=(0, 10))
+
+        # IPv4 column
+        self.ipv4_dns_frame = ctk.CTkFrame(dns_status_cols, fg_color="transparent")
+        self.ipv4_dns_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
+        ctk.CTkLabel(
+            self.ipv4_dns_frame,
+            text="IPv4",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(anchor="w")
+
+        self.ipv4_dns_label = ctk.CTkLabel(
+            self.ipv4_dns_frame,
             text="Select an adapter to view DNS",
             font=ctk.CTkFont(size=12),
             justify="left"
         )
-        self.current_dns_label.pack(anchor="w", padx=10, pady=(0, 10))
+        self.ipv4_dns_label.pack(anchor="w", padx=(10, 0), pady=(0, 4))
+
+        # IPv6 column
+        self.ipv6_dns_frame = ctk.CTkFrame(dns_status_cols, fg_color="transparent")
+        self.ipv6_dns_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+
+        ctk.CTkLabel(
+            self.ipv6_dns_frame,
+            text="IPv6",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(anchor="w")
+
+        self.ipv6_dns_label = ctk.CTkLabel(
+            self.ipv6_dns_frame,
+            text="",
+            font=ctk.CTkFont(size=12),
+            justify="left"
+        )
+        self.ipv6_dns_label.pack(anchor="w", padx=(10, 0), pady=(0, 4))
 
         # DNS Input Section
         input_frame = ctk.CTkFrame(left_column)
@@ -686,61 +718,119 @@ class DNSManager(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(anchor="w", padx=10, pady=(10, 5))
 
-        # Primary DNS
+        # Two-column input layout: IPv4 left, IPv6 right
+        dns_cols_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        dns_cols_frame.pack(fill="x", padx=10, pady=(5, 5))
+
+        # IPv4 column
+        ipv4_input_col = ctk.CTkFrame(dns_cols_frame, fg_color="transparent")
+        ipv4_input_col.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
         ctk.CTkLabel(
-            input_frame,
-            text="Primary DNS:",
+            ipv4_input_col,
+            text="IPv4 Primary DNS:",
             font=ctk.CTkFont(size=13)
-        ).pack(anchor="w", padx=10, pady=(10, 2))
+        ).pack(anchor="w", pady=(0, 2))
 
         self.primary_dns_entry = ctk.CTkEntry(
-            input_frame,
+            ipv4_input_col,
             placeholder_text="e.g., 1.1.1.1",
             font=ctk.CTkFont(size=13),
             height=35
         )
-        self.primary_dns_entry.pack(fill="x", padx=10, pady=(0, 10))
+        self.primary_dns_entry.pack(fill="x", pady=(0, 8))
 
-        # Secondary DNS
         ctk.CTkLabel(
-            input_frame,
-            text="Secondary DNS:",
+            ipv4_input_col,
+            text="IPv4 Secondary DNS:",
             font=ctk.CTkFont(size=13)
-        ).pack(anchor="w", padx=10, pady=(0, 2))
+        ).pack(anchor="w", pady=(0, 2))
 
         self.secondary_dns_entry = ctk.CTkEntry(
-            input_frame,
+            ipv4_input_col,
             placeholder_text="e.g., 1.0.0.1",
             font=ctk.CTkFont(size=13),
             height=35
         )
-        self.secondary_dns_entry.pack(fill="x", padx=10, pady=(0, 10))
+        self.secondary_dns_entry.pack(fill="x", pady=(0, 8))
 
-        # Action buttons
-        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+        ipv4_btn_frame = ctk.CTkFrame(ipv4_input_col, fg_color="transparent")
+        ipv4_btn_frame.pack(fill="x")
 
-        apply_btn = ctk.CTkButton(
-            btn_frame,
-            text="Apply DNS",
-            command=self.apply_dns,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            height=40,
+        ctk.CTkButton(
+            ipv4_btn_frame,
+            text="Apply IPv4",
+            command=self.apply_ipv4_dns,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=36,
             fg_color="#2ecc71",
             hover_color="#27ae60"
-        )
-        apply_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ).pack(side="left", fill="x", expand=True, padx=(0, 3))
 
-        reset_btn = ctk.CTkButton(
-            btn_frame,
-            text="Reset to DHCP",
-            command=self.reset_dns,
-            font=ctk.CTkFont(size=14),
-            height=40,
+        ctk.CTkButton(
+            ipv4_btn_frame,
+            text="Set IPv4 DHCP",
+            command=self.reset_ipv4_dns,
+            font=ctk.CTkFont(size=12),
+            height=36,
             fg_color="#e74c3c",
             hover_color="#c0392b"
+        ).pack(side="right", fill="x", expand=True, padx=(3, 0))
+
+        # IPv6 column
+        ipv6_input_col = ctk.CTkFrame(dns_cols_frame, fg_color="transparent")
+        ipv6_input_col.pack(side="left", fill="both", expand=True, padx=(5, 0))
+
+        ctk.CTkLabel(
+            ipv6_input_col,
+            text="IPv6 Primary DNS:",
+            font=ctk.CTkFont(size=13)
+        ).pack(anchor="w", pady=(0, 2))
+
+        self.ipv6_primary_dns_entry = ctk.CTkEntry(
+            ipv6_input_col,
+            placeholder_text="e.g., 2606:4700:4700::1111",
+            font=ctk.CTkFont(size=13),
+            height=35
         )
-        reset_btn.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        self.ipv6_primary_dns_entry.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(
+            ipv6_input_col,
+            text="IPv6 Secondary DNS:",
+            font=ctk.CTkFont(size=13)
+        ).pack(anchor="w", pady=(0, 2))
+
+        self.ipv6_secondary_dns_entry = ctk.CTkEntry(
+            ipv6_input_col,
+            placeholder_text="e.g., 2606:4700:4700::1001",
+            font=ctk.CTkFont(size=13),
+            height=35
+        )
+        self.ipv6_secondary_dns_entry.pack(fill="x", pady=(0, 8))
+
+        ipv6_btn_frame = ctk.CTkFrame(ipv6_input_col, fg_color="transparent")
+        ipv6_btn_frame.pack(fill="x")
+
+        ctk.CTkButton(
+            ipv6_btn_frame,
+            text="Apply IPv6",
+            command=self.apply_ipv6_dns,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=36,
+            fg_color="#2ecc71",
+            hover_color="#27ae60"
+        ).pack(side="left", fill="x", expand=True, padx=(0, 3))
+
+        ctk.CTkButton(
+            ipv6_btn_frame,
+            text="Set IPv6 DHCP",
+            command=self.reset_ipv6_dns,
+            font=ctk.CTkFont(size=12),
+            height=36,
+            fg_color="#e74c3c",
+            hover_color="#c0392b"
+        ).pack(side="right", fill="x", expand=True, padx=(3, 0))
 
         # DNS Presets
         presets_frame = ctk.CTkFrame(left_column)
@@ -966,20 +1056,19 @@ class DNSManager(ctk.CTk):
                 creationflags=subprocess.CREATE_NO_WINDOW, timeout=3
             )
 
-            dns4, ipv4_static = self._parse_netsh_dns_lines(result4.stdout, ipv6=False)
-            dns6, ipv6_static = self._parse_netsh_dns_lines(result6.stdout, ipv6=True)
+            dns4, ipv4_mode = self._parse_netsh_dns_lines(result4.stdout, ipv6=False)
+            dns6, ipv6_mode = self._parse_netsh_dns_lines(result6.stdout, ipv6=True)
 
             dns_info = None
-            if dns4 or dns6:
+            if dns4 or dns6 or ipv6_mode:
                 dns_info = {}
                 if dns4:
                     dns_info['primary'] = dns4[0]
                     dns_info['secondary'] = dns4[1] if len(dns4) > 1 else ''
-                    dns_info['static'] = ipv4_static
-                if dns6:
-                    dns_info['ipv6_primary'] = dns6[0]
-                    dns_info['ipv6_secondary'] = dns6[1] if len(dns6) > 1 else ''
-                    dns_info['ipv6_static'] = ipv6_static
+                    dns_info['static'] = (ipv4_mode == 'static')
+                dns_info['ipv6_primary'] = dns6[0] if dns6 else ''
+                dns_info['ipv6_secondary'] = dns6[1] if len(dns6) > 1 else ''
+                dns_info['ipv6_mode'] = ipv6_mode
 
             # Update cache
             self._dns_cache[self.current_adapter] = dns_info
@@ -993,23 +1082,42 @@ class DNSManager(ctk.CTk):
         """Display current DNS settings for selected adapter"""
         current_dns = self.get_current_dns_servers()
 
-        if current_dns:
-            rows = []
-            has_ipv6 = 'ipv6_primary' in current_dns
-            prefix4 = 'IPv4 ' if has_ipv6 else ''
-            if current_dns.get('primary'):
-                label = '(Static)' if current_dns.get('static') else '(DHCP)'
-                rows.append(f"{prefix4}Primary {label}: {current_dns['primary']}")
-                if current_dns.get('secondary'):
-                    rows.append(f"{prefix4}Secondary {label}: {current_dns['secondary']}")
-            if has_ipv6:
-                label6 = '(Static)' if current_dns.get('ipv6_static') else '(DHCP)'
-                rows.append(f"IPv6 Primary {label6}: {current_dns['ipv6_primary']}")
-                if current_dns.get('ipv6_secondary'):
-                    rows.append(f"IPv6 Secondary {label6}: {current_dns['ipv6_secondary']}")
-            self.current_dns_label.configure(text='\n'.join(rows))
+        if not self.current_adapter:
+            self.ipv4_dns_label.configure(text="Select an adapter to view DNS")
+            self.ipv6_dns_label.configure(text="—")
+            if hasattr(self, 'saved_scroll'):
+                self.refresh_saved_configs_ui()
+            return
+
+        # IPv4
+        if current_dns and current_dns.get('primary'):
+            label = '(Static)' if current_dns.get('static') else '(DHCP)'
+            ipv4_text = f"Primary {label}: {current_dns['primary']}"
+            if current_dns.get('secondary'):
+                ipv4_text += f"\nSecondary {label}: {current_dns['secondary']}"
         else:
-            self.current_dns_label.configure(text="DNS: DHCP (Automatic)")
+            ipv4_text = "DHCP (Automatic)"
+        self.ipv4_dns_label.configure(text=ipv4_text)
+
+        # IPv6 — always shown with current state
+        ipv6_mode = current_dns.get('ipv6_mode') if current_dns else None
+        ipv6_primary = current_dns.get('ipv6_primary', '') if current_dns else ''
+        ipv6_secondary = current_dns.get('ipv6_secondary', '') if current_dns else ''
+        if ipv6_mode == 'static' and ipv6_primary:
+            ipv6_text = f"Primary (Static): {ipv6_primary}"
+            if ipv6_secondary:
+                ipv6_text += f"\nSecondary (Static): {ipv6_secondary}"
+        elif ipv6_mode == 'dhcp' and ipv6_primary:
+            ipv6_text = f"Primary (DHCP): {ipv6_primary}"
+            if ipv6_secondary:
+                ipv6_text += f"\nSecondary (DHCP): {ipv6_secondary}"
+        elif ipv6_mode == 'auto':
+            ipv6_text = "Automatic"
+        elif ipv6_mode is None:
+            ipv6_text = "Not configured"
+        else:
+            ipv6_text = "Automatic"
+        self.ipv6_dns_label.configure(text=ipv6_text)
 
         # Refresh saved configs UI to update highlighting
         if hasattr(self, 'saved_scroll'):
@@ -1032,109 +1140,176 @@ class DNSManager(ctk.CTk):
             return False
 
     def _parse_netsh_dns_lines(self, output: str, ipv6: bool = False):
-        """Parse netsh dns output. Returns (servers_list, is_static)."""
+        """Parse netsh dns output. Returns (servers_list, mode) where mode is
+        'static', 'dhcp', 'auto', or None.
+        - 'static' : user-set static DNS servers found
+        - 'dhcp'   : real DNS servers assigned via DHCP
+        - 'auto'   : adapter has IPv6 but only Windows fallback/DHCP with no real servers
+        - None     : adapter not present in IPv6 output (IPv6 disabled on adapter)"""
         validate = self.is_valid_ipv6 if ipv6 else self.is_valid_ip
         servers = []
-        is_static = False
+        raw_mode = None   # 'static' or 'dhcp' from the header line
         in_dns_section = False
+
+        def clean_and_accept(raw_ip):
+            """Strip zone ID, reject Windows auto-fallback entries, validate."""
+            ip = raw_ip.split('%')[0].strip()
+            # fec0:0:0:ffff:: are Windows' internal auto-fallback DNS addresses,
+            # not user-configured — ignore them entirely.
+            if ip.lower().startswith('fec0:0:0:ffff::'):
+                return None
+            return ip if (ip and validate(ip)) else None
 
         for line in output.split('\n'):
             stripped = line.strip()
             if 'Statically Configured DNS Servers:' in line:
-                is_static = True
+                raw_mode = 'static'
                 in_dns_section = True
                 _, sep, rest = line.partition(': ')
-                ip = rest.strip() if sep else ''
-                if ip and validate(ip):
+                ip = clean_and_accept(rest) if sep else None
+                if ip:
                     servers.append(ip)
             elif 'DNS servers configured through DHCP:' in line:
-                is_static = False
+                raw_mode = 'dhcp'
                 in_dns_section = True
                 _, sep, rest = line.partition(': ')
-                ip = rest.strip() if sep else ''
-                if ip and validate(ip):
+                ip = clean_and_accept(rest) if sep else None
+                if ip:
                     servers.append(ip)
             elif in_dns_section and stripped:
-                if validate(stripped):
-                    servers.append(stripped)
-                else:
+                ip = clean_and_accept(stripped)
+                if ip:
+                    servers.append(ip)
+                elif not stripped.startswith('Register'):
                     in_dns_section = False
 
-        return servers, is_static
+        # Determine final mode:
+        # - If the adapter didn't appear in the output at all, IPv6 is not configured.
+        # - If it appeared but all servers were Windows fallback (filtered out),
+        #   the adapter is using automatic DNS.
+        ipv6_present = 'Configuration for interface' in output
+        if not ipv6_present:
+            mode = None          # IPv6 not configured on this adapter
+        elif not servers:
+            mode = 'auto'        # present but only fallback/DHCP with no real servers
+        else:
+            mode = raw_mode      # 'static' or 'dhcp' with real servers
 
-    def apply_dns(self):
-        """Apply DNS settings to selected adapter"""
+        return servers, mode
+
+    def apply_ipv4_dns(self):
+        """Apply IPv4 DNS settings to selected adapter"""
         if not self.current_adapter:
             self.show_error("Please select a network adapter first!")
             return
-
         primary = self.primary_dns_entry.get().strip()
         secondary = self.secondary_dns_entry.get().strip()
-
         if not primary:
-            self.show_error("Please enter at least a primary DNS server!")
+            self.show_error("Please enter an IPv4 primary DNS server!")
             return
-
         if not self.is_valid_ip(primary):
-            self.show_error("Invalid primary DNS IP address!")
+            self.show_error("Invalid IPv4 primary DNS address!")
             return
-
         if secondary and not self.is_valid_ip(secondary):
-            self.show_error("Invalid secondary DNS IP address!")
+            self.show_error("Invalid IPv4 secondary DNS address!")
             return
-
         try:
-            # Set primary DNS
             subprocess.run(
                 ['netsh', 'interface', 'ip', 'set', 'dns', self.current_adapter, 'static', primary],
-                check=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                check=True, creationflags=subprocess.CREATE_NO_WINDOW
             )
-
-            # Set secondary DNS if provided
             if secondary:
                 subprocess.run(
                     ['netsh', 'interface', 'ip', 'add', 'dns', self.current_adapter, secondary, 'index=2'],
-                    check=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW
+                    check=True, creationflags=subprocess.CREATE_NO_WINDOW
                 )
-
-            # Invalidate DNS cache
             if self.current_adapter in self._dns_cache:
                 del self._dns_cache[self.current_adapter]
-
-            self.show_success(f"DNS applied successfully!\n\nPrimary: {primary}" + (f"\nSecondary: {secondary}" if secondary else ""))
+            msg = f"IPv4 DNS applied!\n\nPrimary: {primary}"
+            if secondary:
+                msg += f"\nSecondary: {secondary}"
+            self.show_success(msg)
             self.show_current_dns()
-
-            # Flush DNS cache
             subprocess.run(['ipconfig', '/flushdns'], creationflags=subprocess.CREATE_NO_WINDOW)
         except subprocess.CalledProcessError as e:
-            self.show_error(f"Failed to apply DNS. Make sure you're running as Administrator!\n\nError: {str(e)}")
+            self.show_error(f"Failed to apply IPv4 DNS. Make sure you're running as Administrator!\n\nError: {str(e)}")
         except Exception as e:
             self.show_error(f"Error: {str(e)}")
 
-    def reset_dns(self):
-        """Reset DNS to DHCP (automatic)"""
+    def reset_ipv4_dns(self):
+        """Reset IPv4 DNS to DHCP"""
         if not self.current_adapter:
             self.show_error("Please select a network adapter first!")
             return
-
         try:
             subprocess.run(
                 ['netsh', 'interface', 'ip', 'set', 'dns', self.current_adapter, 'dhcp'],
-                check=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                check=True, creationflags=subprocess.CREATE_NO_WINDOW
             )
-
-            # Invalidate DNS cache
             if self.current_adapter in self._dns_cache:
                 del self._dns_cache[self.current_adapter]
-
-            self.show_success("DNS reset to DHCP (automatic) successfully!")
+            self.show_success("IPv4 DNS reset to DHCP successfully!")
             self.show_current_dns()
             subprocess.run(['ipconfig', '/flushdns'], creationflags=subprocess.CREATE_NO_WINDOW)
         except Exception as e:
-            self.show_error(f"Failed to reset DNS: {str(e)}")
+            self.show_error(f"Failed to reset IPv4 DNS: {str(e)}")
+
+    def apply_ipv6_dns(self):
+        """Apply IPv6 DNS settings to selected adapter"""
+        if not self.current_adapter:
+            self.show_error("Please select a network adapter first!")
+            return
+        ipv6_primary = self.ipv6_primary_dns_entry.get().strip()
+        ipv6_secondary = self.ipv6_secondary_dns_entry.get().strip()
+        if not ipv6_primary:
+            self.show_error("Please enter an IPv6 primary DNS server!")
+            return
+        if not self.is_valid_ipv6(ipv6_primary):
+            self.show_error("Invalid IPv6 primary DNS address!")
+            return
+        if ipv6_secondary and not self.is_valid_ipv6(ipv6_secondary):
+            self.show_error("Invalid IPv6 secondary DNS address!")
+            return
+        try:
+            subprocess.run(
+                ['netsh', 'interface', 'ipv6', 'set', 'dns', self.current_adapter, 'static', ipv6_primary],
+                check=True, creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if ipv6_secondary:
+                subprocess.run(
+                    ['netsh', 'interface', 'ipv6', 'add', 'dns', self.current_adapter, ipv6_secondary, 'index=2'],
+                    check=True, creationflags=subprocess.CREATE_NO_WINDOW
+                )
+            if self.current_adapter in self._dns_cache:
+                del self._dns_cache[self.current_adapter]
+            msg = f"IPv6 DNS applied!\n\nPrimary: {ipv6_primary}"
+            if ipv6_secondary:
+                msg += f"\nSecondary: {ipv6_secondary}"
+            self.show_success(msg)
+            self.show_current_dns()
+            subprocess.run(['ipconfig', '/flushdns'], creationflags=subprocess.CREATE_NO_WINDOW)
+        except subprocess.CalledProcessError as e:
+            self.show_error(f"Failed to apply IPv6 DNS. Make sure you're running as Administrator!\n\nError: {str(e)}")
+        except Exception as e:
+            self.show_error(f"Error: {str(e)}")
+
+    def reset_ipv6_dns(self):
+        """Reset IPv6 DNS to automatic"""
+        if not self.current_adapter:
+            self.show_error("Please select a network adapter first!")
+            return
+        try:
+            subprocess.run(
+                ['netsh', 'interface', 'ipv6', 'set', 'dns', self.current_adapter, 'dhcp'],
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if self.current_adapter in self._dns_cache:
+                del self._dns_cache[self.current_adapter]
+            self.show_success("IPv6 DNS reset to automatic successfully!")
+            self.show_current_dns()
+            subprocess.run(['ipconfig', '/flushdns'], creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception as e:
+            self.show_error(f"Failed to reset IPv6 DNS: {str(e)}")
 
     def load_preset(self, dns: Dict[str, str]):
         """Load a DNS preset into the input fields"""
