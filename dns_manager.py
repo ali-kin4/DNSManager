@@ -955,43 +955,31 @@ class DNSManager(ctk.CTk):
                 return self._dns_cache[self.current_adapter]
 
         try:
-            result = subprocess.run(
+            result4 = subprocess.run(
                 ['netsh', 'interface', 'ip', 'show', 'dns', self.current_adapter],
-                capture_output=True,
-                text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                timeout=3  # Add timeout for faster failure
+                capture_output=True, text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW, timeout=3
+            )
+            result6 = subprocess.run(
+                ['netsh', 'interface', 'ipv6', 'show', 'dns', self.current_adapter],
+                capture_output=True, text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW, timeout=3
             )
 
-            dns_servers = []
-            is_static = False
-            lines = result.stdout.split('\n')
-            for line in lines:
-                # The IP may appear on the same line as the header, so extract it rather than skip
-                if 'Statically Configured DNS Servers:' in line:
-                    is_static = True
-                    ip_part = line.split(':', 2)[-1].strip()
-                    if ip_part and self.is_valid_ip(ip_part):
-                        dns_servers.append(ip_part)
-                    continue
-                if 'DNS servers configured through DHCP:' in line:
-                    is_static = False
-                    ip_part = line.split(':', 2)[-1].strip()
-                    if ip_part and self.is_valid_ip(ip_part):
-                        dns_servers.append(ip_part)
-                    continue
-                if any(part.replace('.', '').isdigit() for part in line.split()):
-                    ip = line.strip().split()[-1]
-                    if self.is_valid_ip(ip):
-                        dns_servers.append(ip)
+            dns4, ipv4_static = self._parse_netsh_dns_lines(result4.stdout, ipv6=False)
+            dns6, ipv6_static = self._parse_netsh_dns_lines(result6.stdout, ipv6=True)
 
             dns_info = None
-            if dns_servers:
-                dns_info = {
-                    'primary': dns_servers[0],
-                    'secondary': dns_servers[1] if len(dns_servers) > 1 else '',
-                    'static': is_static
-                }
+            if dns4 or dns6:
+                dns_info = {}
+                if dns4:
+                    dns_info['primary'] = dns4[0]
+                    dns_info['secondary'] = dns4[1] if len(dns4) > 1 else ''
+                    dns_info['static'] = ipv4_static
+                if dns6:
+                    dns_info['ipv6_primary'] = dns6[0]
+                    dns_info['ipv6_secondary'] = dns6[1] if len(dns6) > 1 else ''
+                    dns_info['ipv6_static'] = ipv6_static
 
             # Update cache
             self._dns_cache[self.current_adapter] = dns_info
@@ -1006,11 +994,20 @@ class DNSManager(ctk.CTk):
         current_dns = self.get_current_dns_servers()
 
         if current_dns:
-            label = "(Static)" if current_dns.get('static') else "(DHCP)"
-            dns_text = f"Primary {label}: {current_dns['primary']}"
-            if current_dns['secondary']:
-                dns_text += f"\nSecondary {label}: {current_dns['secondary']}"
-            self.current_dns_label.configure(text=dns_text)
+            rows = []
+            has_ipv6 = 'ipv6_primary' in current_dns
+            prefix4 = 'IPv4 ' if has_ipv6 else ''
+            if current_dns.get('primary'):
+                label = '(Static)' if current_dns.get('static') else '(DHCP)'
+                rows.append(f"{prefix4}Primary {label}: {current_dns['primary']}")
+                if current_dns.get('secondary'):
+                    rows.append(f"{prefix4}Secondary {label}: {current_dns['secondary']}")
+            if has_ipv6:
+                label6 = '(Static)' if current_dns.get('ipv6_static') else '(DHCP)'
+                rows.append(f"IPv6 Primary {label6}: {current_dns['ipv6_primary']}")
+                if current_dns.get('ipv6_secondary'):
+                    rows.append(f"IPv6 Secondary {label6}: {current_dns['ipv6_secondary']}")
+            self.current_dns_label.configure(text='\n'.join(rows))
         else:
             self.current_dns_label.configure(text="DNS: DHCP (Automatic)")
 
@@ -1025,6 +1022,45 @@ class DNSManager(ctk.CTk):
             return len(parts) == 4 and all(0 <= int(part) <= 255 for part in parts)
         except:
             return False
+
+    def is_valid_ipv6(self, ip: str) -> bool:
+        """Validate IPv6 address format"""
+        try:
+            socket.inet_pton(socket.AF_INET6, ip)
+            return True
+        except (socket.error, OSError):
+            return False
+
+    def _parse_netsh_dns_lines(self, output: str, ipv6: bool = False):
+        """Parse netsh dns output. Returns (servers_list, is_static)."""
+        validate = self.is_valid_ipv6 if ipv6 else self.is_valid_ip
+        servers = []
+        is_static = False
+        in_dns_section = False
+
+        for line in output.split('\n'):
+            stripped = line.strip()
+            if 'Statically Configured DNS Servers:' in line:
+                is_static = True
+                in_dns_section = True
+                _, sep, rest = line.partition(': ')
+                ip = rest.strip() if sep else ''
+                if ip and validate(ip):
+                    servers.append(ip)
+            elif 'DNS servers configured through DHCP:' in line:
+                is_static = False
+                in_dns_section = True
+                _, sep, rest = line.partition(': ')
+                ip = rest.strip() if sep else ''
+                if ip and validate(ip):
+                    servers.append(ip)
+            elif in_dns_section and stripped:
+                if validate(stripped):
+                    servers.append(stripped)
+                else:
+                    in_dns_section = False
+
+        return servers, is_static
 
     def apply_dns(self):
         """Apply DNS settings to selected adapter"""
