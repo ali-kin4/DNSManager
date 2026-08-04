@@ -46,6 +46,7 @@ class DNSManager(ctk.CTk):
         self.saved_configs: Dict = {}
         self.current_adapter = None
         self.adapters = []
+        self.adapter_name_map = {}  # display string -> actual interface name
         self.admin_warning_shown = False
         self.benchmark_running = False
 
@@ -886,43 +887,60 @@ class DNSManager(ctk.CTk):
     def refresh_adapters(self):
         """Get list of network adapters"""
         try:
+            ps_script = (
+                "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object {"
+                "$profile = (Get-NetConnectionProfile -InterfaceAlias $_.Name "
+                "-ErrorAction SilentlyContinue).Name;"
+                "\"$($_.Name)|$profile|$($_.InterfaceDescription)\""
+                "}"
+            )
             result = subprocess.run(
-                ['netsh', 'interface', 'show', 'interface'],
+                ['powershell', '-NoProfile', '-Command', ps_script],
                 capture_output=True,
                 text=True,
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
 
             self.adapters = []
-            lines = result.stdout.split('\n')
-            for line in lines[3:]:  # Skip header lines
-                parts = line.split()
-                if len(parts) >= 4 and parts[0] in ['Enabled', 'Connected']:
-                    adapter_name = ' '.join(parts[3:])
-                    if adapter_name:
-                        self.adapters.append(adapter_name)
+            self.adapter_name_map = {}
+            for line in result.stdout.strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split('|')
+                if len(parts) >= 3:
+                    name = parts[0].strip()
+                    profile = parts[1].strip()
+                    description = parts[2].strip()
+                    if profile and description:
+                        display = f"{name}: {profile}: {description}"
+                    elif description:
+                        display = f"{name}: {description}"
+                    else:
+                        display = name
+                    self.adapters.append(display)
+                    self.adapter_name_map[display] = name
 
             if hasattr(self, 'adapter_combo') and self.adapters:
                 self.adapter_combo.configure(values=self.adapters)
                 if self.adapters:
                     # Try to find WiFi adapter as default
-                    default_adapter = self.adapters[0]
+                    default_display = self.adapters[0]
                     wifi_keywords = ['wi-fi', 'wifi', 'wireless', 'wlan', '802.11']
-                    for adapter in self.adapters:
-                        adapter_lower = adapter.lower()
-                        if any(keyword in adapter_lower for keyword in wifi_keywords):
-                            default_adapter = adapter
+                    for display in self.adapters:
+                        if any(keyword in display.lower() for keyword in wifi_keywords):
+                            default_display = display
                             break
 
-                    self.adapter_combo.set(default_adapter)
-                    self.current_adapter = default_adapter
+                    self.adapter_combo.set(default_display)
+                    self.current_adapter = self.adapter_name_map.get(default_display, default_display)
                     self.show_current_dns()
         except Exception as e:
             self.show_error(f"Failed to get network adapters: {str(e)}")
 
     def on_adapter_change(self, choice):
         """Handle adapter selection change"""
-        self.current_adapter = choice
+        self.current_adapter = self.adapter_name_map.get(choice, choice)
         self.show_current_dns()
 
     def get_current_dns_servers(self, use_cache=True):
