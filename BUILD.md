@@ -126,6 +126,10 @@ datas=[('your_file.txt', '.')],
 - Run from command line to see error messages
 - Ensure all dependencies are bundled
 
+**Problem** `ModuleNotFoundError: No module named 'packaging'`
+- Reinstall from `requirements.txt` and make sure it pulls `customtkinter>=5.2.2`.
+  Version `5.2.1` shipped incomplete dependency metadata and could install without `packaging`.
+
 ## Advanced Configuration
 
 ### Custom Icon
