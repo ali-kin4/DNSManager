@@ -966,7 +966,11 @@ class DNSManager(ctk.CTk):
             dns_servers = []
             lines = result.stdout.split('\n')
             for line in lines:
+                # The IP may appear on the same line as the header, so extract it rather than skip
                 if 'Statically Configured DNS Servers:' in line or 'DNS servers configured through DHCP:' in line:
+                    ip_part = line.split(':', 2)[-1].strip()
+                    if ip_part and self.is_valid_ip(ip_part):
+                        dns_servers.append(ip_part)
                     continue
                 if any(part.replace('.', '').isdigit() for part in line.split()):
                     ip = line.strip().split()[-1]
