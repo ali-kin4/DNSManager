@@ -964,10 +964,18 @@ class DNSManager(ctk.CTk):
             )
 
             dns_servers = []
+            is_static = False
             lines = result.stdout.split('\n')
             for line in lines:
                 # The IP may appear on the same line as the header, so extract it rather than skip
-                if 'Statically Configured DNS Servers:' in line or 'DNS servers configured through DHCP:' in line:
+                if 'Statically Configured DNS Servers:' in line:
+                    is_static = True
+                    ip_part = line.split(':', 2)[-1].strip()
+                    if ip_part and self.is_valid_ip(ip_part):
+                        dns_servers.append(ip_part)
+                    continue
+                if 'DNS servers configured through DHCP:' in line:
+                    is_static = False
                     ip_part = line.split(':', 2)[-1].strip()
                     if ip_part and self.is_valid_ip(ip_part):
                         dns_servers.append(ip_part)
@@ -981,7 +989,8 @@ class DNSManager(ctk.CTk):
             if dns_servers:
                 dns_info = {
                     'primary': dns_servers[0],
-                    'secondary': dns_servers[1] if len(dns_servers) > 1 else ''
+                    'secondary': dns_servers[1] if len(dns_servers) > 1 else '',
+                    'static': is_static
                 }
 
             # Update cache
@@ -997,9 +1006,10 @@ class DNSManager(ctk.CTk):
         current_dns = self.get_current_dns_servers()
 
         if current_dns:
-            dns_text = f"Primary: {current_dns['primary']}"
+            label = "(Static)" if current_dns.get('static') else "(DHCP)"
+            dns_text = f"Primary {label}: {current_dns['primary']}"
             if current_dns['secondary']:
-                dns_text += f"\nSecondary: {current_dns['secondary']}"
+                dns_text += f"\nSecondary {label}: {current_dns['secondary']}"
             self.current_dns_label.configure(text=dns_text)
         else:
             self.current_dns_label.configure(text="DNS: DHCP (Automatic)")
