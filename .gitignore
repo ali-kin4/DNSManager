@@ -40,3 +40,6 @@ dns_configs.json
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Other
+logo.ico
