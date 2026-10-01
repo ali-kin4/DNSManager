@@ -82,6 +82,6 @@ Released under the [MIT License](LICENSE).
 
 ## Author
 
-Built and maintained by [Ali Jabbary](https://alijabbary.com), a licensed Professional Engineer creating practical AI, scientific-computing, and technical tools.
+Built and maintained by [Ali Jabbary](https://alijabbary.com), who creates practical AI, scientific-computing, and technical tools.
 
 Questions and bug reports are welcome through [GitHub Issues](https://github.com/ali-kin4/DNSManager/issues).
